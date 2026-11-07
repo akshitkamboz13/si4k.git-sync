@@ -112,6 +112,59 @@ def cmd_worker(args, config: SyncConfig):
     worker.start(run_once=args.once)
 
 
+def cmd_pr_list(args, config: SyncConfig):
+    init_db(config.db_path)
+    with get_connection(config.db_path) as conn:
+        cursor = conn.cursor()
+        if args.project:
+            cursor.execute("SELECT * FROM pr_mappings WHERE project_name = ? ORDER BY id DESC;", (args.project,))
+        else:
+            cursor.execute("SELECT * FROM pr_mappings ORDER BY id DESC;")
+        rows = cursor.fetchall()
+
+    print(f"\n🔀 Tracked Pull Requests ({len(rows)} total)")
+    print("=" * 80)
+    if not rows:
+        print("No pull requests tracked yet. Run 'si4k-sync pr-ingest --project <name>' to check.\n")
+        return
+
+    print(f"{'PR #':<6} | {'Project':<16} | {'Contributor':<15} | {'Status':<12} | {'GitLab MR':<10} | {'HEAD SHA'}")
+    print("-" * 80)
+    for r in rows:
+        mr_str = f"!{r['gitlab_mr_iid']}" if r['gitlab_mr_iid'] else "N/A"
+        print(f"#{r['github_pr_number']:<5} | {r['project_name']:<16} | @{r['contributor_username']:<14} | {r['status']:<12} | {mr_str:<10} | {r['head_sha'][:8]}")
+        if r['merge_sha']:
+            print(f"       ↳ Merged Commit SHA: {r['merge_sha'][:8]}")
+    print("")
+
+
+def cmd_pr_ingest(args, config: SyncConfig):
+    init_db(config.db_path)
+    from bridge.pr_ingestor import PRIngestor
+    ingestor = PRIngestor(config)
+    print(f"🔍 Ingesting external PRs for repository: {args.project}...")
+    results = ingestor.ingest_repo_prs(args.project)
+    if not results:
+        print("ℹ️ No new pull requests to ingest.\n")
+    else:
+        print(f"\n✅ Ingested {len(results)} pull request(s):")
+        for res in results:
+            print(f"   • PR #{res['pr_number']} by @{res['contributor']} ➔ GitLab MR !{res['mr_iid']} (Branch: github-pr/{res['pr_number']}-{res['contributor']})")
+        print("")
+
+
+def cmd_pr_merge(args, config: SyncConfig):
+    init_db(config.db_path)
+    from bridge.merge_executor import HybridMergeExecutor
+    executor = HybridMergeExecutor(config)
+    print(f"🚀 Executing 6-Step Hybrid Merge Protocol for {args.project} PR #{args.pr}...")
+    res = executor.execute_merge(args.project, args.pr, custom_commit_title=args.title)
+    print(f"\n🎉 Success! PR #{args.pr} merged natively on GitHub!")
+    print(f"   • Merge Commit SHA: {res['merge_sha']}")
+    print(f"   • Author attribution and GitHub contribution graph preserved.")
+    print(f"   • Replicated to Home Server GitLab and enqueued for Laptop GitLab.\n")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="si4k-sync",
@@ -142,6 +195,20 @@ def main():
     p_worker = subparsers.add_parser("worker", help="Start the background sync worker daemon")
     p_worker.add_argument("--once", action="store_true", help="Process one job then exit")
 
+    # pr-list
+    p_pr_list = subparsers.add_parser("pr-list", help="List tracked GitHub pull requests")
+    p_pr_list.add_argument("--project", "-p", help="Filter by project name")
+
+    # pr-ingest
+    p_pr_ingest = subparsers.add_parser("pr-ingest", help="Ingest open PRs from GitHub into GitLab MRs")
+    p_pr_ingest.add_argument("--project", "-p", required=True, help="Project name (e.g. PC-Papa)")
+
+    # pr-merge
+    p_pr_merge = subparsers.add_parser("pr-merge", help="Execute 6-step race-safe hybrid merge for an approved PR")
+    p_pr_merge.add_argument("--project", "-p", required=True, help="Project name (e.g. PC-Papa)")
+    p_pr_merge.add_argument("--pr", type=int, required=True, help="GitHub PR number")
+    p_pr_merge.add_argument("--title", help="Optional custom merge commit title")
+
     args = parser.parse_args()
     config = SyncConfig.load()
 
@@ -151,6 +218,9 @@ def main():
         "health": cmd_health,
         "enqueue": cmd_enqueue,
         "worker": cmd_worker,
+        "pr-list": cmd_pr_list,
+        "pr-ingest": cmd_pr_ingest,
+        "pr-merge": cmd_pr_merge,
     }
 
     handler = handlers.get(args.subcommand)
@@ -160,3 +230,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
