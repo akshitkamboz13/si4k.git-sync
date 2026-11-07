@@ -90,3 +90,34 @@ class GitHubClient:
         """Post a comment on a pull request thread."""
         endpoint = f"/repos/{owner}/{repo}/issues/{pull_number}/comments"
         return self._request(endpoint, method="POST", data={"body": comment})
+
+    def list_issues(self, owner: str, repo: str, state: str = "open") -> List[Dict[str, Any]]:
+        """List GitHub issues (filters out pull requests)."""
+        endpoint = f"/repos/{owner}/{repo}/issues?state={state}&sort=updated&direction=desc"
+        items = self._request(endpoint, method="GET")
+        # In GitHub API, PRs are returned by /issues unless filtered
+        return [item for item in items if "pull_request" not in item]
+
+    def get_issue(self, owner: str, repo: str, issue_number: int) -> Dict[str, Any]:
+        """Fetch details for a specific issue."""
+        endpoint = f"/repos/{owner}/{repo}/issues/{issue_number}"
+        return self._request(endpoint, method="GET")
+
+    def update_issue(self, owner: str, repo: str, issue_number: int, state: Optional[str] = None) -> Dict[str, Any]:
+        """Update an issue state (e.g. 'open' or 'closed')."""
+        endpoint = f"/repos/{owner}/{repo}/issues/{issue_number}"
+        payload = {}
+        if state:
+            payload["state"] = state
+        return self._request(endpoint, method="PATCH", data=payload)
+
+    def list_issue_comments(self, owner: str, repo: str, issue_number: int) -> List[Dict[str, Any]]:
+        """List comments for an issue."""
+        endpoint = f"/repos/{owner}/{repo}/issues/{issue_number}/comments"
+        return self._request(endpoint, method="GET")
+
+    def post_issue_comment(self, owner: str, repo: str, issue_number: int, comment: str) -> Dict[str, Any]:
+        """Post a comment to an issue thread."""
+        endpoint = f"/repos/{owner}/{repo}/issues/{issue_number}/comments"
+        return self._request(endpoint, method="POST", data={"body": comment})
+

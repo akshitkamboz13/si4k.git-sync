@@ -165,6 +165,44 @@ def cmd_pr_merge(args, config: SyncConfig):
     print(f"   • Replicated to Home Server GitLab and enqueued for Laptop GitLab.\n")
 
 
+def cmd_issue_list(args, config: SyncConfig):
+    init_db(config.db_path)
+    with get_connection(config.db_path) as conn:
+        cursor = conn.cursor()
+        if args.project:
+            cursor.execute("SELECT * FROM issue_mappings WHERE project_name = ? ORDER BY id DESC;", (args.project,))
+        else:
+            cursor.execute("SELECT * FROM issue_mappings ORDER BY id DESC;")
+        rows = cursor.fetchall()
+
+    print(f"\n📋 Tracked Issues ({len(rows)} total)")
+    print("=" * 85)
+    if not rows:
+        print("No issues tracked yet. Run 'si4k-sync issue-sync --project <name>' to synchronize.\n")
+        return
+
+    print(f"{'Issue #':<8} | {'Project':<16} | {'Author':<15} | {'State':<8} | {'GitLab #':<10} | {'Title'}")
+    print("-" * 85)
+    for r in rows:
+        gl_str = f"#{r['gitlab_issue_iid']}" if r['gitlab_issue_iid'] else "N/A"
+        badge = "🟢 OPEN" if r['state'] == 'open' else "🔒 CLOSED"
+        print(f"GH #{r['github_issue_number']:<5} | {r['project_name']:<16} | @{r['author_username']:<14} | {badge:<8} | {gl_str:<10} | {r['title'][:25]}")
+    print("")
+
+
+def cmd_issue_sync(args, config: SyncConfig):
+    init_db(config.db_path)
+    from bridge.issue_bridge import TwoWayIssueBridge
+    bridge = TwoWayIssueBridge(config)
+    print(f"🔄 Running Two-Way Issue Sync for {args.project}...")
+    stats = bridge.sync_project_issues(args.project)
+    print(f"\n✅ Issue Synchronization Summary:")
+    print(f"   • Inbound Issues Synced (GitHub -> GitLab): {stats['github_to_gitlab_created']}")
+    print(f"   • GitHub Closures Synced to GitLab:        {stats['github_to_gitlab_closed']}")
+    print(f"   • GitLab Closures Synced to GitHub:        {stats['gitlab_to_github_closed']}")
+    print(f"   • Comments Mirrored Across Threads:        {stats['comments_synced']}\n")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="si4k-sync",
@@ -209,6 +247,14 @@ def main():
     p_pr_merge.add_argument("--pr", type=int, required=True, help="GitHub PR number")
     p_pr_merge.add_argument("--title", help="Optional custom merge commit title")
 
+    # issue-list
+    p_iss_list = subparsers.add_parser("issue-list", help="List tracked issues")
+    p_iss_list.add_argument("--project", "-p", help="Filter by project name")
+
+    # issue-sync
+    p_iss_sync = subparsers.add_parser("issue-sync", help="Execute two-way issue and comment sync")
+    p_iss_sync.add_argument("--project", "-p", required=True, help="Project name (e.g. PC-Papa)")
+
     args = parser.parse_args()
     config = SyncConfig.load()
 
@@ -221,6 +267,8 @@ def main():
         "pr-list": cmd_pr_list,
         "pr-ingest": cmd_pr_ingest,
         "pr-merge": cmd_pr_merge,
+        "issue-list": cmd_issue_list,
+        "issue-sync": cmd_issue_sync,
     }
 
     handler = handlers.get(args.subcommand)
@@ -230,4 +278,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

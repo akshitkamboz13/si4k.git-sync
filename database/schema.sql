@@ -68,8 +68,38 @@ CREATE TABLE IF NOT EXISTS sync_audit_log (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 5. Two-Way Issue Sync Mappings (Phase 5)
+CREATE TABLE IF NOT EXISTS issue_mappings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_name TEXT NOT NULL,
+    github_repo TEXT NOT NULL,
+    github_issue_number INTEGER NOT NULL,
+    gitlab_project_id INTEGER,
+    gitlab_issue_iid INTEGER,
+    title TEXT NOT NULL,
+    state TEXT CHECK(state IN ('open', 'closed')) DEFAULT 'open',
+    author_username TEXT NOT NULL,
+    last_synced_github_updated_at TEXT,
+    last_synced_gitlab_updated_at TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(project_name, github_issue_number)
+);
+
+CREATE TABLE IF NOT EXISTS issue_comments_synced (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue_mapping_id INTEGER NOT NULL,
+    source_platform TEXT CHECK(source_platform IN ('github', 'gitlab')),
+    source_comment_id TEXT UNIQUE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(issue_mapping_id) REFERENCES issue_mappings(id) ON DELETE CASCADE
+);
+
 -- Optimized Indexes
 CREATE INDEX IF NOT EXISTS idx_sync_queue_lookup ON sync_queue(status, next_retry_at, locked_until);
 CREATE INDEX IF NOT EXISTS idx_sync_queue_proj_node ON sync_queue(project_name, target_node, status);
 CREATE INDEX IF NOT EXISTS idx_pr_mappings_lookup ON pr_mappings(github_repo, status);
 CREATE INDEX IF NOT EXISTS idx_audit_op ON sync_audit_log(operation_id);
+CREATE INDEX IF NOT EXISTS idx_issue_mappings_lookup ON issue_mappings(project_name, github_issue_number);
+CREATE INDEX IF NOT EXISTS idx_issue_comments_lookup ON issue_comments_synced(source_comment_id);
+

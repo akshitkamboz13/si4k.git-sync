@@ -115,3 +115,55 @@ class GitLabClient:
         encoded_id = urllib.parse.quote(str(project_id), safe="")
         endpoint = f"/projects/{encoded_id}/merge_requests?state=opened"
         return self._request(endpoint, method="GET")
+
+    def list_issues(self, project_id: int | str, state: str = "opened") -> List[Dict[str, Any]]:
+        """List issues for a GitLab project."""
+        encoded_id = urllib.parse.quote(str(project_id), safe="")
+        endpoint = f"/projects/{encoded_id}/issues?state={state}"
+        return self._request(endpoint, method="GET")
+
+    def get_issue(self, project_id: int | str, issue_iid: int) -> Dict[str, Any]:
+        """Fetch details for a specific GitLab issue."""
+        encoded_id = urllib.parse.quote(str(project_id), safe="")
+        endpoint = f"/projects/{encoded_id}/issues/{issue_iid}"
+        return self._request(endpoint, method="GET")
+
+    def create_issue(
+        self,
+        project_id: int | str,
+        title: str,
+        description: str,
+        labels: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Create a new issue in GitLab."""
+        encoded_id = urllib.parse.quote(str(project_id), safe="")
+        endpoint = f"/projects/{encoded_id}/issues"
+        payload = {
+            "title": title,
+            "description": description,
+        }
+        if labels:
+            payload["labels"] = ",".join(labels)
+        return self._request(endpoint, method="POST", data=payload)
+
+    def update_issue(self, project_id: int | str, issue_iid: int, state_event: Optional[str] = None) -> Dict[str, Any]:
+        """Update issue state (state_event: 'close' or 'reopen')."""
+        encoded_id = urllib.parse.quote(str(project_id), safe="")
+        endpoint = f"/projects/{encoded_id}/issues/{issue_iid}"
+        payload = {}
+        if state_event:
+            payload["state_event"] = state_event
+        return self._request(endpoint, method="PUT", data=payload)
+
+    def list_issue_notes(self, project_id: int | str, issue_iid: int) -> List[Dict[str, Any]]:
+        """List comments/notes on a GitLab issue."""
+        encoded_id = urllib.parse.quote(str(project_id), safe="")
+        endpoint = f"/projects/{encoded_id}/issues/{issue_iid}/notes"
+        return self._request(endpoint, method="GET")
+
+    def comment_on_issue(self, project_id: int | str, issue_iid: int, note: str) -> Dict[str, Any]:
+        """Add a comment/note to a GitLab issue."""
+        encoded_id = urllib.parse.quote(str(project_id), safe="")
+        endpoint = f"/projects/{encoded_id}/issues/{issue_iid}/notes"
+        return self._request(endpoint, method="POST", data={"body": note})
+
