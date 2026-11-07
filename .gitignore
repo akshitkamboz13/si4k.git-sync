@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+cache_repos/
+*.env
+!secrets.env.example
+.vscode/
+.idea/

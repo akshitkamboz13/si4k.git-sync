@@ -1,0 +1,27 @@
+[Unit]
+Description=si4k.git-sync Tri-Node Replication Worker Daemon
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=si4k
+Group=si4k
+WorkingDirectory=/home/si4k/si4k.git-sync
+EnvironmentFile=-/etc/si4k-git-sync/secrets.env
+Environment=PYTHONUNBUFFERED=1
+Environment=SI4K_SYNC_DB_PATH=/home/si4k/.local/share/si4k-git-sync/sync-state.sqlite
+Environment=SI4K_SYNC_DATA_DIR=/home/si4k/.local/share/si4k-git-sync
+Environment=SERVER_GITLAB_URL=http://127.0.0.1:8929
+ExecStart=/home/si4k/si4k.git-sync/bin/si4k-sync worker
+Restart=always
+RestartSec=10
+LimitNOFILE=65536
+
+# Security Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/si4k/.local/share/si4k-git-sync /tmp /home/si4k/.ssh
+
+[Install]
+WantedBy=multi-user.target
