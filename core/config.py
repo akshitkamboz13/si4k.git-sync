@@ -26,17 +26,23 @@ class SyncConfig:
     @classmethod
     def load(cls) -> "SyncConfig":
         # Check for optional env file if not already loaded
-        env_file = os.environ.get("SI4K_SYNC_ENV_FILE", "/etc/si4k-git-sync/secrets.env")
-        if os.path.isfile(env_file):
-            with open(env_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#") and "=" in line:
-                        k, v = line.split("=", 1)
-                        k = k.strip()
-                        v = v.strip().strip("\"'")
-                        if k not in os.environ:
-                            os.environ[k] = v
+        env_candidates = [
+            os.environ.get("SI4K_SYNC_ENV_FILE", ""),
+            "/etc/si4k-git-sync/secrets.env",
+            str(Path.home() / ".config/si4k-git-sync/secrets.env"),
+        ]
+        for candidate in env_candidates:
+            if candidate and os.path.isfile(candidate):
+                with open(candidate, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#") and "=" in line:
+                            k, v = line.split("=", 1)
+                            k = k.strip()
+                            v = v.strip().strip("\"'")
+                            if k not in os.environ:
+                                os.environ[k] = v
+                break
 
         data_dir = Path(os.environ.get("SI4K_SYNC_DATA_DIR", Path.home() / ".local/share/si4k-git-sync"))
         data_dir.mkdir(parents=True, exist_ok=True)
