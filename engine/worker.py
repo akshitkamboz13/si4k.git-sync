@@ -15,6 +15,7 @@ from core.queue_leaser import QueueLeaser
 from core.logger import get_logger
 from engine.health_checker import HealthChecker
 from engine.replicator import GitReplicator, ReplicationError
+from engine.status_exporter import StatusExporter
 
 logger = get_logger("si4k.worker")
 
@@ -25,6 +26,7 @@ class SyncWorker:
         self.leaser = QueueLeaser(self.config.db_path)
         self.replicator = GitReplicator(self.config)
         self.health_checker = HealthChecker(self.config)
+        self.exporter = StatusExporter(self.config)
         self._running = False
         self._current_job: Optional[SyncJob] = None
         self._last_health_check = 0.0
@@ -32,6 +34,12 @@ class SyncWorker:
     def start(self, run_once: bool = False) -> None:
         self._running = True
         logger.info(f"Starting si4k.git-sync worker [{self.config.worker_id}] on DB: {self.config.db_path}")
+
+        # Initial export of status
+        try:
+            self.exporter.export()
+        except Exception as e:
+            logger.debug(f"Initial status export notice: {e}")
 
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._handle_signal)
@@ -48,6 +56,12 @@ class SyncWorker:
                     except Exception as e:
                         logger.warning(f"Health check probe error: {e}")
 
+                # Update live status file
+                try:
+                    self.exporter.export()
+                except Exception as e:
+                    logger.debug(f"Status export error: {e}")
+
                 # 2. Acquire next eligible job from queue
                 job = self.leaser.acquire_lease(
                     worker_id=self.config.worker_id,
@@ -56,6 +70,10 @@ class SyncWorker:
 
                 if job:
                     self._process_job(job)
+                    try:
+                        self.exporter.export()
+                    except Exception:
+                        pass
                     if run_once:
                         break
                     continue

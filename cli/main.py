@@ -203,6 +203,15 @@ def cmd_issue_sync(args, config: SyncConfig):
     print(f"   • Comments Mirrored Across Threads:        {stats['comments_synced']}\n")
 
 
+def cmd_export_status(args, config: SyncConfig):
+    init_db(config.db_path)
+    from engine.status_exporter import StatusExporter
+    target_path = Path(args.path) if args.path else None
+    exporter = StatusExporter(config, export_path=target_path)
+    out_file = exporter.export()
+    print(f"✅ Exported live sync status to: {out_file}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="si4k-sync",
@@ -255,6 +264,10 @@ def main():
     p_iss_sync = subparsers.add_parser("issue-sync", help="Execute two-way issue and comment sync")
     p_iss_sync.add_argument("--project", "-p", required=True, help="Project name (e.g. PC-Papa)")
 
+    # export-status
+    p_exp = subparsers.add_parser("export-status", help="Export live status JSON for Web Dashboard")
+    p_exp.add_argument("--path", help="Destination path for status.json")
+
     args = parser.parse_args()
     config = SyncConfig.load()
 
@@ -269,6 +282,7 @@ def main():
         "pr-merge": cmd_pr_merge,
         "issue-list": cmd_issue_list,
         "issue-sync": cmd_issue_sync,
+        "export-status": cmd_export_status,
     }
 
     handler = handlers.get(args.subcommand)
@@ -278,5 +292,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
